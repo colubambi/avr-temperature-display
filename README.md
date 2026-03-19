@@ -1,42 +1,49 @@
-# AVR Temperature Display
+# avr-temperature-display
 
-This project reads temperature from an LM35 sensor and displays it on a single-digit 7-segment display using an AVR microcontroller (ATmega328P).  
+Bare-metal C for ATmega — reads ADC input from a temperature sensor and displays the value on a 7-segment display.
 
-The code was created with guidance from ChatGPT.
+Written without Arduino libraries. Direct register manipulation using the AVR datasheet.
 
-## Features
-- Reads temperature using the LM35 sensor
-- Displays temperature on a common-anode 7-segment display
-- Uses ADC (Analog-to-Digital Converter) for accurate readings
-- Fully commented code for clarity
+## What it does
 
-## Tools Used
-- AVR C (GCC)
-- ATmega328P microcontroller
-- Atmel Studio 7
-- Optional: Proteus or other simulator for testing
+- Initializes the ADC with AVCC (5V) as reference voltage and a prescaler of 128 (125kHz sample rate — within the ATmega's 50–200kHz recommended range)
+- Reads a 10-bit ADC value from PA0
+- Converts the raw reading to Celsius: `temperature = (ADC * 500) / 1024`
+- Outputs the units digit to a common-anode 7-segment display on Port B every 500ms
 
-## How to Run
-1. Load `main.c` into Atmel Studio (GCC C Executable Project)  
-2. Make sure the project **device** is set to **ATmega328P**  
-3. Connect LM35 sensor and 7-segment display according to the wiring diagram  
-4. Compile and flash the code to the microcontroller  
-5. Observe temperature readings on the 7-segment display  
+## Hardware
 
-## Wiring Overview
-- **LM35**  
-  - VCC → +5V  
-  - Output → PA0 (ADC0)  
-  - GND → GND  
-- **7-Segment Display (Common Anode)**  
-  - Common → +5V  
-  - a → PB0, b → PB1, c → PB2, d → PB3, e → PB4, f → PB5, g → PB6  
-  - DP → PB7 (optional)  
+- **MCU:** ATmega (tested at 16MHz)
+- **Sensor:** Analog temperature sensor on PA0 (e.g. LM35)
+- **Display:** Common-anode 7-segment on Port B
 
-> Use 220Ω resistors in series with each segment to limit current.
+## Limitation
 
-## Date Completed
-- January 7, 2026
+Only the units digit is displayed (e.g. 25°C shows as `5`). Showing both digits requires a multiplexed 2-digit display setup — two digit select pins toggled rapidly with separate Port B writes for tens and units. Not implemented here.
 
-## Acknowledgements
-- Project code was developed with guidance from ChatGPT
+## Bug fix (v1.1)
+
+Original code had `ADPS1` written twice instead of `ADPS1 | ADPS0`. This set prescaler to 64 (250kHz) — slightly outside the recommended ADC clock range. Fixed to correctly set all three prescaler bits for prescaler 128 (125kHz).
+
+```c
+// Before (wrong — prescaler 64, 250kHz)
+ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS1);
+
+// After (correct — prescaler 128, 125kHz)
+ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+```
+
+## Build
+
+Compile with avr-gcc:
+
+```bash
+avr-gcc -mmcu=atmega32 -DF_CPU=16000000UL -Os -o avr-temp.elf avr-temperature-display.c
+avr-objcopy -O ihex avr-temp.elf avr-temp.hex
+```
+
+Flash with avrdude:
+
+```bash
+avrdude -c usbasp -p m32 -U flash:w:avr-temp.hex
+```
